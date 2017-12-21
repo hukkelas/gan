@@ -47,12 +47,12 @@ class DCGAN:
         activation_fn=tf.nn.relu)
       
       # Deconv layer 4
-      h4 = deconv2d(h3, [batch_size, start_dim*16, start_dim*16, 64],
-        scope="g_deconv2d_h4",
-        batch_norm=True,
-        activation_fn=tf.nn.relu)
+      #h4 = deconv2d(h3, [batch_size, start_dim*16, start_dim*16, 64],
+      #  scope="g_deconv2d_h4",
+      #  batch_norm=True,
+      #  activation_fn=tf.nn.relu)
       
-      h4 = tf.reshape(h4, [batch_size, -1])
+      h4 = tf.reshape(h3, [batch_size, -1])
       h5 = fully_connected(h4, self.imsize*self.imsize*self.c_dim,activation_fn=tf.nn.tanh, scope="g_fc_h5")
       h5 = tf.reshape(h5,[batch_size, self.imsize, self.imsize, self.c_dim])
       return h5
@@ -68,8 +68,8 @@ class DCGAN:
       h1 = conv2d(h0, d*2, scope="d_conv2d_h1", activation_fn=lrelu, batch_norm=True)
       h2 = conv2d(h1, d*4, scope="d_conv2d_h2", activation_fn=lrelu, batch_norm=True)
       h3 = conv2d(h2, d*8, scope="d_conv2d_h3", activation_fn=lrelu, batch_norm=True)
-      h4 = conv2d(h3, d*16, scope="d_conv2d_h4", activation_fn=lrelu, batch_norm=True)
-      h4 = tf.reshape(h4, [batch_size, math.ceil(self.imsize/32)*d*16])
+      #h4 = conv2d(h3, d*16, scope="d_conv2d_h4", activation_fn=lrelu, batch_norm=True)
+      h4 = tf.reshape(h3, [batch_size, int(math.ceil(self.imsize/16.))**2*d*8])
       
       out = fully_connected(h4, 1, None, batch_norm=False, scope='d_conv2d_out')
       return out
@@ -81,24 +81,29 @@ class DCGAN:
     # Define generator
     self.G = self.generator(self.z, batch_size)
     self.sampler = self.generator(self.z, self.sample_num, reuse_variables=True)
+    # Define discriminator
     self.D_real = self.discriminator(self.X, batch_size)
     self.D_fake = self.discriminator(self.G, batch_size, reuse_variables=True)
     
-
-    # Define loss functions
+    # Loss given by Jensen-Shannon Divergence
+    # Discriminator Loss
     d_loss_real = tf.reduce_mean(tf.nn.
       sigmoid_cross_entropy_with_logits(logits=self.D_real, labels=tf.ones_like(self.D_real)))
     d_loss_fake = tf.reduce_mean(tf.nn.
       sigmoid_cross_entropy_with_logits(logits=self.D_fake, labels=tf.zeros_like(self.D_fake)))
     self.d_loss = d_loss_fake + d_loss_real
+    # Generator loss
     self.g_loss = tf.reduce_mean(tf.nn
       .sigmoid_cross_entropy_with_logits(logits=self.D_fake, labels=tf.ones_like(self.D_fake)))
 
+    # Separate trainable variables for generator / discriminator
+    d_vars = [t for t in tf.trainable_variables() if 'discriminator' in t.name]
+    g_vars = [t for t in tf.trainable_variables() if 'generator' in t.name]
     # Define optimizer
     self.D_optimizer = tf.train.AdamOptimizer(self.learning_rate, self.adam_beta). \
-      minimize(self.d_loss)
+      minimize(self.d_loss, var_list=d_vars)
     self.G_optimizer = tf.train.AdamOptimizer(self.learning_rate, self.adam_beta). \
-      minimize(self.g_loss)
+      minimize(self.g_loss, var_list=g_vars)
   
   def train(self, max_epochs):
     t = time.time()
@@ -118,10 +123,13 @@ class DCGAN:
             feed_dict={self.X: batch, self.z: batch_z})
           _, gloss = sess.run([self.G_optimizer, self.g_loss],
             feed_dict={self.z: batch_z})
+        if epoch % 5 == 0:
           print("time: {:.2f}, dloss: {:.4f}, gloss: {:.4f}".format(time.time() - t, dloss, gloss))
+          t = time.time()
           samples = sess.run(self.sampler, feed_dict={self.z: sample_z})
-          save_image("generated/result{}.png".format(it), samples)
+          save_image("generated/result{}.png".format(epoch), samples)
+
 
 
 dcgan = DCGAN(None)
-dcgan.train(2)
+dcgan.train(500)

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 def save_image(fname, images, row_dim=3):
   h,w,c_dim = images.shape[1:]
-  col_dim = math.ceil(images.shape[0] / row_dim)
+  col_dim = int(math.ceil(images.shape[0] / float(row_dim)))
   result = np.ones((images.shape[1]*row_dim,col_dim*images.shape[2], images.shape[3]))
   row_idx=0
   col_idx=0
